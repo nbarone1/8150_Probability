@@ -105,8 +105,8 @@ class IsingLattice:
 
         if self.node_diff(M,N) <= 0:
             self.system[M,N] *= -1
-        elif np.exp(self.node_diff(M,N)) > np.random.uniform(0,1):
-            self.system[M,N] *= -1
+        elif np.exp(-self.node_diff(M,N)) < np.random.uniform(0,1):
+            self.system[M,N] *= 1
 
     def same(self,N,M):
         """
@@ -156,12 +156,12 @@ def run(lattice,burn_in,iterations,video=True):
     fig = plt.figure()
 
     # Run Iterations and record images
-    with writer.saving(fig, "ising.mp4", 100):
+    with writer.saving(fig, "ising.mp4", 50):
         for i in tqdm(range(iterations)):
             lattice.config_change()
 
-            if video and iterations % (i//75) == 0:
-                img = plt.imshow(np.unit8(lattice.system),cmap="jet",interpolation="nearest")
+            if video and i % 10000 == 0:
+                img = plt.imshow(lattice.system,cmap="jet",interpolation="nearest")
                 writer.grab_frame()
                 img.remove()
     
@@ -198,7 +198,8 @@ def run(lattice,burn_in,iterations,video=True):
 )
 @click.option(
     '--video',
-    is_flag=True,
+    default = True,
+    is_flag=False,
     help='Record a video of the simulation progression'
 )
 def main(size,burn_in,iterations,video):
