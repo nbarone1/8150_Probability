@@ -33,14 +33,6 @@ class IsingLattice:
         system = np.random.choice([-1,1], self.sqr_size)
 
         return system
-    
-    def get_initial_state(self):
-        """ Getting coordinates of the initial state.
-        
-        Return:
-        int: x and y coordinates of starting state.
-        """
-        self.initial_state = 2*np.random.randint(2,size=(self.size,self.size))-1
 
     def _bc(self,i):
         """Checking lattice coordinate is inside of the bounds and applying boundary condition if it falls outside.
@@ -158,7 +150,6 @@ def run(lattice,burn_in,iterations,video=True):
     # Run Iterations and record images
     with writer.saving(fig, "ising.mp4", 50):
         for i in tqdm(range(iterations)):
-            lattice.get_initial_state()
             lattice.config_change()
 
             if video and i % 10000 == 0:
