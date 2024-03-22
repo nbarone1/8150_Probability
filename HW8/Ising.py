@@ -183,7 +183,7 @@ def run(lattice,burn_in,iterations,video=True):
 )
 @click.option(
     '--iterations','-i',
-    default=1_000_000,
+    default=4_000_000,
     type=int,
     show_default=True,
     help='Number of iterations to run the simulation for'
