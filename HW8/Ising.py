@@ -109,15 +109,20 @@ class IsingLattice:
         """
 
         # indic is indicator function under our logic system
-        neighbors = [self.system[self._bc(N - 1), M], self.system[self._bc(N + 1), M],
-            self.system[N, self._bc(M - 1)], self.system[N, self._bc(M + 1)]]
-        indic = [1 if x == self.system[M,N] else 0 for x in neighbors]
-        print(indic)
+        # neighbors = [self.system[self._bc(N - 1), M], self.system[self._bc(N + 1), M],
+        #     self.system[N, self._bc(M - 1)], self.system[N, self._bc(M + 1)]]
+        # indic = [1 if x == self.system[M,N] else 0 for x in neighbors]
+        # print(indic)
 
-        if 0 in indic:
-            return 0
-        else:
+        # if 0 in indic:
+        #     return 0
+        # else:
+        #     return 1
+
+        if self.node_diff(N,M) == 4:
             return 1
+        else:
+            return 0
 
 
 

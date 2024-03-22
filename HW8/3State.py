@@ -33,7 +33,6 @@ class metro_hast_chain:
 
     def stationary_dist(self):
         L,V = eig(self.M,left = True,right = False)
-        l1i = np.argmax(L)
         l1v = L.max()
         stat_dist = V[:, 0].T/sum(V[:,0])
         return l1v,stat_dist
