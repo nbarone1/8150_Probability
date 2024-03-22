@@ -18,14 +18,14 @@ class metro_hast_chain:
         self.M = np.asmatrix(self.initial_prob*self.proposal_prob.reshape(3,1))
 
     def start(self):
-        s = self.X.rvs(1)
+        s = self.X.rvs(1)-1
         self.chain.append(s)
         return s
 
     def advance(self):
         for i in tqdm(range(self.chain_length)):
             x0 = self.chain[i-1]
-            x = self.Y.rvs(1)
+            x = self.Y.rvs(1)-1
             if x > np.random.uniform(0,1):
                 self.chain.append(x)
             else:

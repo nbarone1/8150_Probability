@@ -158,6 +158,7 @@ def run(lattice,burn_in,iterations,video=True):
     # Run Iterations and record images
     with writer.saving(fig, "ising.mp4", 50):
         for i in tqdm(range(iterations)):
+            lattice.get_initial_state()
             lattice.config_change()
 
             if video and i % 10000 == 0:

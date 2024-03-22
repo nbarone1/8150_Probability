@@ -16,7 +16,7 @@ def discrete_3_sample(X_W,P_W):
     sample: int: value from the list of states chosen based on its corresponding probability
     """
     X = stats.rv_discrete(name = "X",values = (X_W, P_W))
-    sample = X.rvs(1)
+    sample = X.rvs(1)-1
     return sample
 
 # Sampling from the same X_W and P_W using a random uniform variable
