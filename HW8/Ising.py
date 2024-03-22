@@ -97,7 +97,7 @@ class IsingLattice:
 
         if self.node_diff(M,N) <= 0:
             self.system[M,N] *= -1
-        elif np.exp(-self.node_diff(M,N)) < np.random.uniform(0,1):
+        elif np.exp(-2*self.node_diff(M,N)) < np.random.uniform(0,1):
             self.system[M,N] *= 1
 
     def same(self,N,M):
