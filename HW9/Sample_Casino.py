@@ -4,6 +4,7 @@
 import numpy as np
 from scipy import stats
 from tqdm import tqdm
+from scipy.linalg import eig
 import click
 
 # Creating R.V. X, Y
@@ -16,6 +17,7 @@ class hidden_cas():
         self.YF = stats.rv_discrete(name = "YF",values = ((1,2,3,4,5,6), YF))
         self.YC = stats.rv_discrete(name = "YC",values = ((1,2,3,4,5,6), YC))
         self.cas_start = x0
+        self.M = np.asmatrix(np.array([.95,.05],[.05,.95]))
 
     def sample_t(self,t):
         # For part a
@@ -38,6 +40,15 @@ class hidden_cas():
                     yc.append(self.YC.rvs(1)-1)
 
         return xc[-1], yc[-1]
+    
+    def stationary_dist(self):
+        L,V = eig(self.M,left = True,right = False)
+        l1v = L.max()
+        stat_dist = V[:, 0].T/sum(V[:,0])
+        return l1v,stat_dist
         
-    def simulation(self,T):
+    def forward(self,T):
+        xc,yc = self.sample_t(T)
+        a0 = self.YF.pmf(yc[0])
+        alpha = [a0]
         
