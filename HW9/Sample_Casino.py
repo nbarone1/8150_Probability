@@ -11,18 +11,19 @@ import click
 # For Y, YF and YC are for the outcomes of fair and cheating rolls
 
 class hidden_cas():
-    def __init__(self,a,YF,YC,T):
+    def __init__(self,a,YF,YC,T,b,n):
         # a is probability of changing casino state
         self.a = float(a)
-        print(YF)
-        print(YC)
         self.YF = stats.rv_discrete(name = "YF",values = ((1,2,3,4,5,6), YF))
         self.YC = stats.rv_discrete(name = "YC",values = ((1,2,3,4,5,6), YC))
         # Case 1 = Fair, 2 = Cheat
         self.cas_start = 0
+        self.burnin = b
+        self.n_iter = n
         self.T = T
         self.M = np.asmatrix([[1-self.a, self.a],[self.a, 1-self.a]])
         self.emission = np.asmatrix([YF,YC])
+        self.mcmc_state = self.mcmc()
         self.xc,self.yc = self.build_instances()
         self.alphaF, self.alphaC = self.forward()
         self.betaF,self.betaC = self.backward()
@@ -36,7 +37,6 @@ class hidden_cas():
         y0 = self.YF.rvs(1)-1
         yc = [y0]
         cstate = 0
-        print(self.a)
         for i in tqdm(range(self.T)):
             p = np.random.uniform(0,1)
             if p < self.a:
@@ -44,7 +44,6 @@ class hidden_cas():
                     cstate = 1
                 elif cstate == 1:
                     cstate = 0
-            print(cstate)
             xc.append(cstate)
             if cstate == 0:
                 yc.append(self.YF.rvs(1)-1)
@@ -63,10 +62,66 @@ class hidden_cas():
     def sample(self,t):
         return self.xc[t-1],self.yc[t-1]
     
+    def mcmc_flip(self,cstate):
+        cstate = 0
+        pstate = 0
+        if np.random.uniform(0,1) < self.a:
+            if cstate == 0:
+                pstate = 1
+            elif cstate == 1:
+                pstate == 0
+        else:
+            pstate = cstate
+        return pstate
+    
+    def prob_cheat(self,chain):
+        cc = chain.count(1)
+        return cc/len(chain)
+
+
+    
     def mcmc(self):
-        return
+        cstate = self.cas_start
+        mcmcstates = [0]
+        for i in tqdm(range(self.T)):
+            p = np.random.uniform(0,1)
+            if p < self.a:
+                if cstate == 0:
+                    cstate = 1
+                elif cstate == 1:
+                    cstate = 0
+            mcmcstates.append(cstate)
+        
+        for i in tqdm(range(self.burnin)):
+            mcstp = mcmcstates.copy()
+            for r in range(self.T):
+                mcstp[r-1] = self.mcmc_flip(mcmcstates[r-1])
+
+            mcstp[0] = 0
+            if self.prob_cheat(mcmcstates) == 0:
+                acceptance = 1
+            else:
+                acceptance = min(1,(self.prob_cheat(mcstp)/self.prob_cheat(mcmcstates)))
+
+            if np.random.uniform(0,1) < acceptance:
+                mcmcstates = mcstp
+
+        for i in tqdm(range(self.n_iter)):
+            mcstp = mcmcstates.copy()
+            for r in range(self.T):
+                mcstp[r-1] = self.mcmc_flip(mcmcstates[r-1])
+            
+            if self.prob_cheat(mcmcstates) == 0:
+                acceptance = 1
+            else:
+                acceptance = min(1,(self.prob_cheat(mcstp)/self.prob_cheat(mcmcstates)))
+
+            if np.random.uniform(0,1) < acceptance:
+                mcmcstates = mcstp
+        return mcmcstates
         
     def forward(self):
+        print(self.YF.pmf(self.yc[0]))
         alphaF = [self.YF.pmf(self.yc[0])]
         alphaC = [0]
         for i in tqdm(range(self.T)):
@@ -96,23 +151,25 @@ class hidden_cas():
         z = []
         yfb = []
         ya = []
+        ymcmc = []
         for i in tqdm(range(self.T)):
             z.append(i)
-            yfb.append(self.t_is_cheat(i))
+            yfb.append(self.t_is_cheat(i-1))
             ya.append(self.xc[i-1])
-            
-        
-        ymcmc = []
+            ymcmc.append(self.prob_cheat(self.mcmc_state[0:i+1]))
 
         fig, ax1 = plt.subplots()
         
         ax2 = ax1.twinx()
         ax1.plot(z,yfb,label = "Forward/Backward")
         ax2.plot(z,ya,'r-',label = "Actual States")
-        # ax1.plot(z,ymcmc,label = "MCMC")
+        ax1.plot(z,ymcmc,label = "MCMC")
         ax1.set_xlabel('Time')
         ax1.set_ylabel('Probability of Cheating')
         ax2.set_ylabel('State in True Chain')
+        ax1.legend(loc='upper right', bbox_to_anchor=(0.5, 1.20), fancybox=True, shadow=True)
+        ax2.legend(loc='upper left', bbox_to_anchor=(0.5, 1.20), fancybox=True, shadow=True)
+        ax1.set_title("Comparing F/B, MH predictions to Actual Casino")
         plt.savefig('hidden_casino.png')
 
 @click.command()
@@ -143,10 +200,27 @@ class hidden_cas():
     show_default=True,
     help='T number of observed rolls'
 )
+@click.option(
+    '--T',
+    default=200,
+    show_default=True,
+    help='T number of observed rolls'
+)
+@click.option(
+    '--b',
+    default=10000,
+    show_default=True,
+    help='Burn in iterations'
+)
+@click.option(
+    '--n',
+    default=200,
+    show_default=True,
+    help='MCMC iterations'
+)
 
-def main(a,yf,yc,t):
-    print(yf)
-    casino = hidden_cas(a,yf,yc,t)
+def main(a,yf,yc,t,b,n):
+    casino = hidden_cas(a,yf,yc,t,b,n)
     casino.plots()
 
 if __name__ == "__main__":
