@@ -31,24 +31,25 @@ class hidden_cas():
     def build_instances(self):
         # For part a
         # Take initial state, do t iterations
-        state = self.cas_start
         # xc and yc are states and rolls at each step i
-        xc = [state]
+        xc = [self.cas_start]
         y0 = self.YF.rvs(1)-1
         yc = [y0]
+        cstate = 0
+        print(self.a)
         for i in tqdm(range(self.T)):
             p = np.random.uniform(0,1)
             if p < self.a:
-                if state == 1:
-                    state = 0
-                elif state == 0:
-                    state == 1
-            xc.append(state)
-            if state == 0:
+                if cstate == 0:
+                    cstate = 1
+                elif cstate == 1:
+                    cstate = 0
+            print(cstate)
+            xc.append(cstate)
+            if cstate == 0:
                 yc.append(self.YF.rvs(1)-1)
-            elif state == 1:
+            elif cstate == 1:
                 yc.append(self.YC.rvs(1)-1)
-
         return xc,yc
     
     def transition_matrix(self):
@@ -92,17 +93,26 @@ class hidden_cas():
         return self.betaC[t-1]*self.alphaC[t-1]*(1/self.Z)
     
     def plots(self):
-        x = []
+        z = []
         yfb = []
+        ya = []
         for i in tqdm(range(self.T)):
-            x.append(i)
+            z.append(i)
             yfb.append(self.t_is_cheat(i))
+            ya.append(self.xc[i-1])
+            
         
         ymcmc = []
 
-        plt.plot(x,yfb,label = "Forward/Backward")
-        # plt.plot(x,ymcmc,label = "MCMC")
-        plt.show()
+        fig, ax1 = plt.subplots()
+        
+        ax2 = ax1.twinx()
+        ax1.plot(z,yfb,label = "Forward/Backward")
+        ax2.plot(z,ya,'r-',label = "Actual States")
+        # ax1.plot(z,ymcmc,label = "MCMC")
+        ax1.set_xlabel('Time')
+        ax1.set_ylabel('Probability of Cheating')
+        ax2.set_ylabel('State in True Chain')
         plt.savefig('hidden_casino.png')
 
 @click.command()
