@@ -4,8 +4,8 @@
 # Using GPU to run code
 
 import matplotlib.pyplot as plt
-from tkinter.filedialog import askopenfilename
 import matplotlib.animation as manimation
+import keras
 from tqdm import tqdm
 import click
 
@@ -16,15 +16,16 @@ class cluster():
     def __init__(self,kn,maxiter):
         self.kn = kn
         self.maxiter = maxiter
-        self.data = self.load_file()
+        self.train, self.test = self.data_prep()
         self.size = len(self.data)
         self.pred, self.centers = self.fit()
 
-    def load_file(self):
-        filename = askopenfilename()
-        data = cp.genfromtxt(filename,)
-        assert data.ndim == 2
-        return data
+    def data_prep(self):
+        (X1,Y1), (X2,Y2) = keras.datasets.mnist.load_data()
+        train = (X1[:5000].reshape(5000,784),Y1[:5000])
+        test = (X2[:1000].reshape(1000,784), Y2[:1000])
+
+        return train,test
     
     def fit_step(self,pred,centers):
         dist = cp.linalg.norm(self.data[: None, :] - centers[None, :, :],axis = 2)
