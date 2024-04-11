@@ -44,7 +44,7 @@ class cluster():
         mask = pred == c[:,None]
         sums = cp.where(mask[:, :, None], data, 0).sum(axis = 1)
         counts = cp.count_nonzero(mask, axis = 1).reshape((self.kn,1))
-        centers = sums/counts 
+        centers = sums/counts
 
         return pred,centers   
 
@@ -62,20 +62,22 @@ class cluster():
                 acc[i-1::] = acc[i-2]
                 change[i-1::] = 0
                 break
-            change[i-1] = cp.sum(cp.subtract(pred,new_pred))
+            change[i-1] = cp.linalg.norm(new_pred - pred)
             pred = new_pred
             centers = new_centers
 
-            acc[i-1] = (cp.count_nonzero(pred == self.ytrain)/60000)*100
+            acc[i-1] = cp.sum(cp.count_nonzero(self.ytrain == pred))/60000
 
         fig, ax1 = plt.subplots()
         
         ax2 = ax1.twinx()
-        ax1.plot(cp.asnumpy(acc), 'r-',)
-        ax2.plot(cp.asnumpy(change),'g-')
+        ax1.plot(cp.asnumpy(acc), 'r-',label = "Accuracy")
+        ax2.plot(cp.asnumpy(change),'g-',label = "Change in Centroids")
         ax1.set_xlabel('Iterations')
         ax1.set_ylabel('Accuracy %')
         ax2.set_ylabel('Change in Centroids')
+        ax1.legend(loc='upper right', bbox_to_anchor=(0.5, 1.15), fancybox=True, shadow=True)
+        ax2.legend(loc='upper left', bbox_to_anchor=(0.5, 1.15), fancybox=True, shadow=True)
         plt.savefig('accuracy_change.png')
 
         return centers
@@ -83,7 +85,7 @@ class cluster():
 @click.command()
 @click.option(
     '--maxiter','-m',
-    default=50,
+    default=100,
     show_default=True,
     help='Max Iterations'
 )
