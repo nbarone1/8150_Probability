@@ -7,7 +7,6 @@ import os
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 import matplotlib.pyplot as plt
-import matplotlib.animation as manimation
 import keras
 from tqdm import tqdm
 import click
@@ -80,9 +79,6 @@ class cluster():
         plt.savefig('accuracy_change.png')
 
         return centers
-    
-# def run(cluster):
-    # return
 
 @click.command()
 @click.option(
