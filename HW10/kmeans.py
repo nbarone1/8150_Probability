@@ -81,7 +81,7 @@ class cluster():
             new_pred = self.pred_step(self.xtrain,new_centers)
 
             if cp.all(new_pred == pred):
-                break            
+                break           
             pred = new_pred
             centers = new_centers
 

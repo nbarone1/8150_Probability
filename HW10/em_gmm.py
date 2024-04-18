@@ -14,33 +14,77 @@ import click
 # For from scratch kmeans
 import cupy as cp
 
+class theta():
+    def __init__(self,x,k):
+        initial_means = cp.random.choice(len(x),k,replace=False)
+        self.means = x[initial_means]
+        self.covs = cp.ones(k)
+
+    def retrieve_mean(self,cluster):
+        return self.means[cluster]
+    
+    def retrieve_covs(self,cluster):
+        return self.covs[cluster]
+    
+    def update_mean(self,cluster,value):
+        self.means[cluster] = value
+
+    def update_covs(self,cluster,value):
+        self.covs[cluster] = value
+
 class em_gmm():
 
-    def __init__(self,tl,ttl,iter,k):
-        self.tl = tl
-        self.ttl = ttl
+    def __init__(self,train_length,test_length,iter,k):
+        self.trainl = train_length
+        self.testl = test_length
         self.k = k
         self.iter = iter
-        self.xtrain, self.xtest,self.ytest = self.data_prep()
-        self.weight = 1/10
+        self.loglike = 0
+        self.xtrain, self.ytrain, self.xtest,self.ytest = self.data_prep()
+        self.probs = cp.divide(cp.ones(self.k),self.k)
+        self.q = cp.zeros(train_length,k)
+        assert cp.sum(self.probs) == 1
+        self.theta = theta(self.xtrain,self.k)
         
         
 
     def data_prep(self):
-        assert self.tl <= 60000
-        assert self.ttl <= 10000
+        assert self.trainl <= 60000
+        assert self.testl <= 10000
         (X1,Y1), (X2,Y2) = keras.datasets.mnist.load_data()
-        xtrain = cp.divide(cp.array(X1.reshape(self.tl,784)),255)
-        xtest = cp.divide(cp.array(X2.reshape(self.ttl,784)),255)
-        ytest = cp.array(Y2[self.ttl])
+        xtrain = cp.divide(cp.array(X1.reshape(60000,784)),255)
+        xtrain = xtrain[:self.trainl,:]
+        ytrain = cp.array(Y1[:self.trainl])
+        xtest = cp.divide(cp.array(X2.reshape(10000,784)),255)
+        xtest = xtest[:self.testl,:]
+        ytest = cp.array(Y2[:self.testl])
         assert xtrain.ndim == 2
+        assert ytrain.ndim == 1
         assert xtest.ndim == 2
         assert ytest.ndim == 1
 
-        return xtrain,xtest,ytest
-
-    def train(self):
-        initial_means = cp.random.choice(self.tl,self.k,replace=False)
+        return xtrain,ytrain,xtest,ytest
+    
+    def q_calc(self,x,mean,cov,prob):
+        d = cp.linalg.norm(x-mean)**2
+        c = cov**2
+        ep = -d/(2*c)
+        qnum = prob*cp.exp(ep)
+        qden = (2*c*cp.pi)**(392)
+        q_val = qnum/qden
+        return q_val
+    
+    def update_q(self):
+        q = cp.zeros(self.trainl,self.k)
+        for i in range(self.trainl):
+            x = self.xtrain[i]
+            for c in range(self.k):
+                m = self.theta.retrieve_mean(c)
+                c = self.theta.retrieve_covs(c)
+                p = self.probs[c]
+                q[i][c] = self.q_calc(x,m,c,p)
+        
+        self.q = cp.linalg.norm(q,axis=1)
 
     def e_step(self):
         return
@@ -49,6 +93,15 @@ class em_gmm():
         return
     
     def log_like(self):
+        loglike = 0
+        for x in range(self.xtrain):
+            for c in range(self.k):
+                
+        if loglike == self.loglike:
+            return -1
+        assert self.loglike < loglike
+        return loglike
+        
     
 
 @click.command()
