@@ -16,6 +16,7 @@ import cupy as cp
 
 class theta():
     def __init__(self,x,k):
+        # Move probabilities into this class
         initial_means = cp.random.choice(len(x),k,replace=False)
         self.means = x[initial_means]
         self.covs = cp.ones(k)
@@ -42,7 +43,7 @@ class em_gmm():
         self.loglike = 0
         self.xtrain, self.ytrain, self.xtest,self.ytest = self.data_prep()
         self.probs = cp.divide(cp.ones(self.k),self.k)
-        self.q = cp.zeros(train_length,k)
+        self.q = cp.zeros((train_length,k))
         assert cp.sum(self.probs) == 1
         self.theta = theta(self.xtrain,self.k)
         
@@ -75,7 +76,7 @@ class em_gmm():
         return q_val
     
     def update_q(self):
-        q = cp.zeros(self.trainl,self.k)
+        q = cp.zeros((self.trainl,self.k))
         for i in range(self.trainl):
             x = self.xtrain[i]
             for c in range(self.k):
@@ -86,21 +87,71 @@ class em_gmm():
         
         self.q = cp.linalg.norm(q,axis=1)
 
+    def log_like(self):
+        loglike = 0
+        for i in range(self.xtrain):
+            x = self.trainl[x]
+            for c in range(self.k):
+                m = self.theta.retrieve_mean(c)
+                c = self.theta.retrieve_covs(c)
+                p = self.probs[c]
+                loglike += cp.log(self.q_calc(x,m,c,p))*self.q[i][c]
+                
+        if loglike == self.loglike:
+            return 1
+        assert self.loglike < loglike
+        self.loglike = loglike
+        return 0
+
     def e_step(self):
+        self.update_q()
+        s = self.log_like()
+        return s
+    
+    def new_means(self):
+        qrows = cp.sum(self.q,axis = 0)
+        for c in range(self.k):
+            mu = cp.zeros(784)
+            for i in range(self.trainl):
+                qsum = self.q[i][c]
+                x = self.xtrain[i]
+                mu += cp.multiply(x,qsum)
+            mu = cp.divide(mu,qrows[c])
+            self.theta.update_mean(mu)
+
+    def new_covs(self,means):
+        for c in range(self.k):
+            val = 0
+            for i in range(self.trainl):
+                d = cp.linalg.norm(self.xtrain[i] - means[c])**2
+                q = self.q[i][c]
+                val += d*q
+            val = val/(4*cp.pi*784)
+            self.theta.update_covs(c,val)
+
+    def new_prob(self):
         return
     
     def m_step(self):
+        self.new_covs()
+        self.new_means()
+        self.new_prob()
         return
     
-    def log_like(self):
-        loglike = 0
-        for x in range(self.xtrain):
-            for c in range(self.k):
-                
-        if loglike == self.loglike:
-            return -1
-        assert self.loglike < loglike
-        return loglike
+    def pred(self):
+        return
+    
+    def run(self):
+        for i in tqdm(range(self.iter)):
+            s = self.e_step()
+            if s == 1:
+                break
+            self.m_step()
+
+        # prediction
+
+        # print means
+    
         
     
 
@@ -133,7 +184,7 @@ class em_gmm():
 
 def main(train,test,iter,k):
     gmm = em_gmm(test,train,iter,k)
-    return
+    gmm.run()
 
 if __name__ == "__main__":
     plt.ion()
