@@ -1,7 +1,5 @@
 # EM for GMM on MNIST
 
-# Using GPU to run code via cuPy
-
 import os
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -11,7 +9,6 @@ import keras
 from tqdm import tqdm
 import click
 
-# For from scratch kmeans
 import cupy as cp
 
 class theta():
@@ -20,6 +17,7 @@ class theta():
         initial_means = cp.random.choice(len(x),k,replace=False)
         self.means = x[initial_means]
         self.covs = cp.ones(k)
+        self.probs = cp.divide(cp.ones(k),k)
 
     def retrieve_mean(self,cluster):
         return self.means[cluster]
@@ -27,11 +25,18 @@ class theta():
     def retrieve_covs(self,cluster):
         return self.covs[cluster]
     
+    def retrieve_probs(self,cluster):
+        return self.probs[cluster]
+    
     def update_mean(self,cluster,value):
         self.means[cluster] = value
 
     def update_covs(self,cluster,value):
         self.covs[cluster] = value
+
+    def update_probs(self,cluster,value):
+        self.probs[cluster]= value
+        assert cp.sum(self.probs) == 1
 
 class em_gmm():
 
@@ -42,13 +47,9 @@ class em_gmm():
         self.iter = iter
         self.loglike = 0
         self.xtrain, self.ytrain, self.xtest,self.ytest = self.data_prep()
-        self.probs = cp.divide(cp.ones(self.k),self.k)
         self.q = cp.zeros((train_length,k))
-        assert cp.sum(self.probs) == 1
         self.theta = theta(self.xtrain,self.k)
         
-        
-
     def data_prep(self):
         assert self.trainl <= 60000
         assert self.testl <= 10000
@@ -75,27 +76,27 @@ class em_gmm():
         q_val = qnum/qden
         return q_val
     
-    def update_q(self):
-        q = cp.zeros((self.trainl,self.k))
-        for i in range(self.trainl):
-            x = self.xtrain[i]
+    def update_q(self,data):
+        q = cp.zeros((len(data),self.k))
+        for i in range(len(data)):
+            x = data[i]
             for c in range(self.k):
                 m = self.theta.retrieve_mean(c)
-                c = self.theta.retrieve_covs(c)
-                p = self.probs[c]
-                q[i][c] = self.q_calc(x,m,c,p)
-        
-        self.q = cp.linalg.norm(q,axis=1)
+                co = self.theta.retrieve_covs(c)
+                p = self.theta.retrieve_probs(c)
+                q[i,c] = self.q_calc(x,m,co,p)
+        q_row_sums = cp.sum(q,axis=1)
+        self.q = cp.divide(q,q_row_sums[:,None])
 
-    def log_like(self):
+    def log_like(self,data):
         loglike = 0
-        for i in range(self.xtrain):
-            x = self.trainl[x]
+        for i in range(len(data)):
+            x = data[i]
             for c in range(self.k):
                 m = self.theta.retrieve_mean(c)
-                c = self.theta.retrieve_covs(c)
-                p = self.probs[c]
-                loglike += cp.log(self.q_calc(x,m,c,p))*self.q[i][c]
+                co = self.theta.retrieve_covs(c)
+                p = self.theta.retrieve_probs(c)
+                loglike += cp.log(self.q_calc(x,m,co,p))*self.q[i,c]
                 
         if loglike == self.loglike:
             return 1
@@ -104,8 +105,8 @@ class em_gmm():
         return 0
 
     def e_step(self):
-        self.update_q()
-        s = self.log_like()
+        self.update_q(self.xtrain)
+        s = self.log_like(self.xtrain)
         return s
     
     def new_means(self):
@@ -113,7 +114,7 @@ class em_gmm():
         for c in range(self.k):
             mu = cp.zeros(784)
             for i in range(self.trainl):
-                qsum = self.q[i][c]
+                qsum = self.q[i,c]
                 x = self.xtrain[i]
                 mu += cp.multiply(x,qsum)
             mu = cp.divide(mu,qrows[c])
@@ -124,12 +125,16 @@ class em_gmm():
             val = 0
             for i in range(self.trainl):
                 d = cp.linalg.norm(self.xtrain[i] - means[c])**2
-                q = self.q[i][c]
+                q = self.q[i,c]
                 val += d*q
             val = val/(4*cp.pi*784)
             self.theta.update_covs(c,val)
 
     def new_prob(self):
+        qsums = cp.sum(self.q,axis = 1)
+        for c in range(self.k):
+            new_prob = qsums[c]/6000
+            self.theta.update_probs(c,new_prob)
         return
     
     def m_step(self):
@@ -139,7 +144,19 @@ class em_gmm():
         return
     
     def pred(self):
-        return
+        q = cp.zeros((len(self.xtest),self.k))
+        for i in range(len(self.xtest)):
+            x = self.xtest[i]
+            for c in range(self.k):
+                m = self.theta.retrieve_mean(c)
+                co = self.theta.retrieve_covs(c)
+                p = self.theta.retrieve_probs(c)
+                q[i,c] = self.q_calc(x,m,co,p)
+        
+        q = cp.linalg.norm(q,axis = 1)
+        pred_val = cp.argmax(q,axis=1)
+        accuracy = cp.where(self.ytest == pred_val)/len(self.ytest)
+        return pred_val,accuracy     
     
     def run(self):
         for i in tqdm(range(self.iter)):
@@ -148,9 +165,20 @@ class em_gmm():
                 break
             self.m_step()
 
-        # prediction
+        pred_val, accuracy = self.pred()
 
-        # print means
+        plot_numbers = cp.ceil(self.k/5)
+        fig, ax1 = plt.subplots(plot_numbers,5)
+        for c in range(self.k):
+            plot_position1 = cp.floor(c/5)
+            plot_position2 = c % 5
+            data = self.theta.retrieve_mean(c)
+            data = cp.reshape(data,(28,28))
+            ax1[plot_position1,plot_position2].matshow(data,cmap='gray', vmin=0, vmax=255)
+
+        fig.suptitle('GMM with "{:.0%}"'.format(accuracy))
+        fig.savefig('means.png')
+        
     
         
     
@@ -183,7 +211,7 @@ class em_gmm():
 
 
 def main(train,test,iter,k):
-    gmm = em_gmm(test,train,iter,k)
+    gmm = em_gmm(train,test,iter,k)
     gmm.run()
 
 if __name__ == "__main__":

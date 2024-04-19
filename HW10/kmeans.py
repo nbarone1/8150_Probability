@@ -1,7 +1,5 @@
 # K-Means from Scratch
 
-# Using GPU to run code via cuPy
-
 import os
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -11,7 +9,6 @@ import keras
 from tqdm import tqdm
 import click
 
-# For from scratch kmeans
 import cupy as cp
 
 class cluster():
