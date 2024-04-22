@@ -94,6 +94,9 @@ class cluster():
         
         testpred = self.test_step(self.xtest,centers)
 
+        accuracy = cp.divide(cp.count_nonzero(testpred == self.ytest),len(testpred))
+        print(accuracy)
+
         centers = cp.multiply(centers,255)
         print(cp.max(centers))
 
@@ -129,7 +132,7 @@ class cluster():
         bx1[1,2].matshow(c7,cmap='gray', vmin=0, vmax=255)
         bx1[1,3].matshow(c8,cmap='gray', vmin=0, vmax=255)
         bx1[1,4].matshow(c9,cmap='gray', vmin=0, vmax=255)
-        fig.savefig('centroids.png')
+        fig.savefig('centroids.pdf')
 
         return centers,testpred
     
@@ -143,7 +146,7 @@ class cluster():
         res[i] = label.get(z)
         return res
 
-
+# Optional Command Line Flags, Default is standard values run (all mnist records, 10 clusters, 5 epochs, 10 iterations per epoch)
 @click.command()
 @click.option(
     '--epochs','-e',

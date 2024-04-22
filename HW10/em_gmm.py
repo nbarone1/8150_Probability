@@ -36,7 +36,6 @@ class theta():
 
     def update_probs(self,cluster,value):
         self.probs[cluster]= value
-        assert cp.sum(self.probs) == 1
 
 class em_gmm():
 
@@ -53,6 +52,7 @@ class em_gmm():
     def data_prep(self):
         assert self.trainl <= 60000
         assert self.testl <= 10000
+        # Testing if it works when we do not normalize the data
         (X1,Y1), (X2,Y2) = keras.datasets.mnist.load_data()
         xtrain = cp.divide(cp.array(X1.reshape(60000,784)),255)
         xtrain = xtrain[:self.trainl,:]
@@ -70,37 +70,47 @@ class em_gmm():
     def q_calc(self,x,mean,cov,prob):
         d = cp.linalg.norm(x-mean)**2
         c = cov**2
-        ep = -d/(2*c)
-        qnum = prob*cp.exp(ep)
-        qden = (2*c*cp.pi)**(392)
-        q_val = qnum/qden
+        ep = -d/(2*cp.pi*c)
+        diff = cp.log(prob) + ep - 392*cp.log(2*c*cp.pi)
+        # Take the exponential value after doing all of the calcuations
+        # Avoid the underflow
+        q_val = cp.exp(diff)
         return q_val
     
     def update_q(self,data):
         q = cp.zeros((len(data),self.k))
+        # Switch loop order for faster run ?
         for i in range(len(data)):
             x = data[i]
             for c in range(self.k):
                 m = self.theta.retrieve_mean(c)
                 co = self.theta.retrieve_covs(c)
                 p = self.theta.retrieve_probs(c)
+                a = self.q_calc(x,m,co,p)
                 q[i,c] = self.q_calc(x,m,co,p)
+        q_max = cp.max(q,axis =1)
+        q = cp.divide(q,q_max[:,None])
         q_row_sums = cp.sum(q,axis=1)
         self.q = cp.divide(q,q_row_sums[:,None])
 
     def log_like(self,data):
         loglike = 0
+        # Switch loop order for faster run ?
         for i in range(len(data)):
             x = data[i]
             for c in range(self.k):
                 m = self.theta.retrieve_mean(c)
                 co = self.theta.retrieve_covs(c)
                 p = self.theta.retrieve_probs(c)
-                loglike += cp.log(self.q_calc(x,m,co,p))*self.q[i,c]
+                d = cp.linalg.norm(x-m)**2
+                co = co**2
+                ep = -d/(2*co*cp.pi)
+                diff = cp.log(p) + ep - 392*cp.log(2*co*cp.pi)
+                a = (self.q[i,c])
+                loglike += diff*self.q[i,c]
                 
         if loglike == self.loglike:
             return 1
-        assert self.loglike < loglike
         self.loglike = loglike
         return 0
 
@@ -118,30 +128,43 @@ class em_gmm():
                 x = self.xtrain[i]
                 mu += cp.multiply(x,qsum)
             mu = cp.divide(mu,qrows[c])
-            self.theta.update_mean(mu)
+            self.theta.update_mean(c,mu)
 
-    def new_covs(self,means):
+    def new_covs(self):
         for c in range(self.k):
             val = 0
             for i in range(self.trainl):
-                d = cp.linalg.norm(self.xtrain[i] - means[c])**2
+                d = cp.linalg.norm(self.xtrain[i] - self.theta.retrieve_mean(c))**2
                 q = self.q[i,c]
                 val += d*q
             val = val/(4*cp.pi*784)
+            val = cp.sqrt(val)
             self.theta.update_covs(c,val)
 
     def new_prob(self):
-        qsums = cp.sum(self.q,axis = 1)
+        qsums = cp.sum(self.q,axis = 0)
+        prob_check = 0
         for c in range(self.k):
-            new_prob = qsums[c]/6000
+            a = qsums[c]
+            new_prob = qsums[c]/self.trainl
             self.theta.update_probs(c,new_prob)
-        return
+            prob_check += new_prob
+        fyck = cp.sum(prob_check)
+        assert cp.sum(prob_check) == 1
     
     def m_step(self):
         self.new_covs()
         self.new_means()
         self.new_prob()
         return
+
+    def dictionary(self):
+        self.dict = dict.fromkeys(range(self.k))
+        pred_val = cp.argmax(self.q,axis=1)
+        for i in range(self.k):
+            index = cp.where(pred_val == i)
+            num = cp.bincount(self.ytrain[index]).argmax()
+            self.dict[i] = num.item()
     
     def pred(self):
         q = cp.zeros((len(self.xtest),self.k))
@@ -153,10 +176,15 @@ class em_gmm():
                 p = self.theta.retrieve_probs(c)
                 q[i,c] = self.q_calc(x,m,co,p)
         
-        q = cp.linalg.norm(q,axis = 1)
+        q_row_sums = cp.sum(q,axis=1)
+        self.q = cp.divide(q,q_row_sums[:,None])
         pred_val = cp.argmax(q,axis=1)
-        accuracy = cp.where(self.ytest == pred_val)/len(self.ytest)
-        return pred_val,accuracy     
+        pred = cp.array(len(self.ytest))
+        for i in range(len(pred_val)):
+            z = pred_val[i].item()
+            pred[i] = self.dict.get(z)
+        accuracy = cp.where(self.ytest == pred)/len(self.ytest)
+        return pred_val,accuracy
     
     def run(self):
         for i in tqdm(range(self.iter)):
@@ -164,6 +192,8 @@ class em_gmm():
             if s == 1:
                 break
             self.m_step()
+
+        self.dictionary()
 
         pred_val, accuracy = self.pred()
 
@@ -177,7 +207,7 @@ class em_gmm():
             ax1[plot_position1,plot_position2].matshow(data,cmap='gray', vmin=0, vmax=255)
 
         fig.suptitle('GMM with "{:.0%}"'.format(accuracy))
-        fig.savefig('means.png')
+        fig.savefig('em_means.pdf')
         
     
         
@@ -186,13 +216,13 @@ class em_gmm():
 @click.command()
 @click.option(
     '--train','-t',
-    default=60000,
+    default=5000,
     show_default=True,
     help='Number of Training Items'
 )
 @click.option(
     '--test','-tt',
-    default=10000,
+    default=1000,
     show_default=True,
     help='Number of Testing Items'
 )
