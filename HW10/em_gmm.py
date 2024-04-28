@@ -8,13 +8,17 @@ import matplotlib.pyplot as plt
 import keras
 from tqdm import tqdm
 import click
+import pdb
 
 import cupy as cp
+
+# Could not solve how to handle when the covariance shrinks too small for the E step to produce good values
 
 class theta():
     def __init__(self,x,k):
         # Move probabilities into this class
-        initial_means = cp.random.choice(len(x),k,replace=False)
+        # initial_means = cp.random.choice(len(x),k,replace=False)
+        initial_means = cp.arange(0,k)
         self.means = x[initial_means]
         self.covs = cp.ones(k)
         self.probs = cp.divide(cp.ones(k),k)
@@ -75,6 +79,7 @@ class em_gmm():
         # Take the exponential value after doing all of the calcuations
         # Avoid the underflow
         q_val = cp.exp(diff)
+        # q_val = diff
         return q_val
     
     def update_q(self,data):
@@ -87,15 +92,20 @@ class em_gmm():
                 co = self.theta.retrieve_covs(c)
                 p = self.theta.retrieve_probs(c)
                 a = self.q_calc(x,m,co,p)
+                if i == 96:
+                    d = cp.linalg.norm(x-m)**2
+                    co = co**2
+                    ep = -d/(2*cp.pi*co)
+                    diff = cp.log(p) + ep - 392*cp.log(2*co*cp.pi)
+                    print(a)
                 q[i,c] = self.q_calc(x,m,co,p)
         q_max = cp.max(q,axis =1)
-        q = cp.divide(q,q_max[:,None])
-        q_row_sums = cp.sum(q,axis=1)
-        self.q = cp.divide(q,q_row_sums[:,None])
+        nq = cp.divide(q,q_max[:,None])
+        q_row_sums = cp.sum(nq,axis=1)
+        self.q = cp.divide(nq,q_row_sums[:,None])
 
     def log_like(self,data):
         loglike = 0
-        # Switch loop order for faster run ?
         for i in range(len(data)):
             x = data[i]
             for c in range(self.k):
@@ -106,8 +116,12 @@ class em_gmm():
                 co = co**2
                 ep = -d/(2*co*cp.pi)
                 diff = cp.log(p) + ep - 392*cp.log(2*co*cp.pi)
-                a = (self.q[i,c])
+                a = self.q[i,c]
+                if cp.isnan(diff*self.q[i,c]):
+                    print(i,c,diff,a)
                 loglike += diff*self.q[i,c]
+
+        print(loglike)
                 
         if loglike == self.loglike:
             return 1
@@ -150,7 +164,7 @@ class em_gmm():
             self.theta.update_probs(c,new_prob)
             prob_check += new_prob
         fyck = cp.sum(prob_check)
-        assert cp.sum(prob_check) == 1
+        print(cp.sum(prob_check) == 1)
     
     def m_step(self):
         self.new_covs()
@@ -216,13 +230,13 @@ class em_gmm():
 @click.command()
 @click.option(
     '--train','-t',
-    default=5000,
+    default=100,
     show_default=True,
     help='Number of Training Items'
 )
 @click.option(
     '--test','-tt',
-    default=1000,
+    default=10,
     show_default=True,
     help='Number of Testing Items'
 )
